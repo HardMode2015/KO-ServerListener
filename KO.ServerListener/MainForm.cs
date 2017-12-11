@@ -13,27 +13,54 @@ using System.Net.Sockets;
 using System.Threading;
 using KO.ServerListener.Properties;
 
-
 namespace KO.ServerListener
 {
     public partial class MainForm : Form
     {
+        /// <summary>
+        /// Getter for the current date time.
+        /// </summary>
         public string TimeStamp => DateTime.Now.ToString("T");
 
+        /// <summary>
+        /// Stores the host to connect.
+        /// </summary>
         private string _hostIp;
+        
+        /// <summary>
+        /// Stores the frequency the call will be made.
+        /// minimum frequency is set to 500 miliseconds.
+        /// </summary>
         private int _frequencyMiliseconds;
+        
+        /// <summary>
+        /// Stores a bool to know if listening loop 
+        /// has been started.
+        /// </summary>
         private bool _startListening;
 
+        /// <summary>
+        /// Stores the ports.
+        /// </summary>
         private readonly int LOGIN_SERVER = 15100;
         private readonly int GAME_SERVER  = 15001;
 
-        Thread[] workers = new Thread[2];
+        /// <summary>
+        /// Stores the workers.
+        /// </summary>
+        private Thread[] workers = new Thread[2];
 
+        /// <summary>
+        /// Intialize the form component.
+        /// </summary>
         public MainForm()
         {
             InitializeComponent();
         }
 
+        /// <summary>
+        /// When clicking on the start button event listener.
+        /// </summary>
         private void btnStart_Click(object sender, EventArgs e)
         {
             _hostIp = tbxHostIp.Text;
@@ -53,6 +80,9 @@ namespace KO.ServerListener
                 worker.Start();
         }
 
+        /// <summary>
+        /// When clicking on the stop button event listener.
+        /// </summary>
         private void btnStop_Click(object sender, EventArgs e)
         {
             _startListening      = false;
@@ -63,11 +93,18 @@ namespace KO.ServerListener
             tbxFrequency.Enabled = true;
         }
 
+        /// <summary>
+        /// When clicking on the clear button event listener,
+        /// To clean the console.
+        /// </summary>
         private void btnClear_Click(object sender, EventArgs e)
         {
             lbxLogger.Items.Clear();
         }
 
+        /// <summary>
+        /// When the window is being closed event listener.
+        /// </summary>
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
             if (!_startListening) return;
@@ -82,12 +119,16 @@ namespace KO.ServerListener
                 Thread.Sleep(750);
             }
 
-            // Free up the main thread so the foreach loop behind get the chance to update the ui.
+            /// Free up the main thread so the foreach loop behind get the chance to update the ui.
             Thread tDelayed = new Thread(() => Thread.Sleep(3500));
             tDelayed.Start();
             tDelayed.Join();
         }
 
+        /// <summary>
+        /// This method is fired by a worker and is pinging
+        /// the Login-Server.
+        /// </summary>
         private void StartListeningLoginServer()
         {
             bool isServerReachable = false;
@@ -114,6 +155,10 @@ namespace KO.ServerListener
             } while (_startListening);
         }
 
+        /// <summary>
+        /// This method is fired by a worker and is pinging
+        /// the Game-Server.
+        /// </summary>
         private void StartListeningGameServer()
         {
             bool isServerReachable = false;
@@ -140,6 +185,10 @@ namespace KO.ServerListener
             } while (_startListening);
         }
 
+        /// <summary>
+        /// This method updates the login server row on the window.
+        /// based on if the server is online or offline.
+        /// </summary>
         private void UpdateLoginServer(bool isServerReachable)
         {
             if (isServerReachable)
@@ -163,6 +212,10 @@ namespace KO.ServerListener
             lbxLogger.SelectedIndex = lbxLogger.Items.Count - 1;
         }
 
+        /// <summary>
+        /// This method updates the game server row on the window.
+        /// based on if the server is online or offline.
+        /// </summary>
         private void UpdateGameServer(bool isServerReachable)
         {
             if (isServerReachable)

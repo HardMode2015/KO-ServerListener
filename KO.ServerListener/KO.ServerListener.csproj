@@ -82,5 +82,11 @@
   <ItemGroup>
     <None Include="Resources\background.png" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\KO.ServerListener.Library\KO.ServerListener.Library.csproj">
+      <Project>{51866c9b-d875-4b4c-9d9b-42aaaf3033e3}</Project>
+      <Name>KO.ServerListener.Library</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

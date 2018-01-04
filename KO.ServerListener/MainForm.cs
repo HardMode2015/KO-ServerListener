@@ -1,17 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Media;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Net;
-using System.Net.Sockets;
-using System.Threading;
-using KO.ServerListener.Properties;
+using KO.ServerListener.Library;
 
 namespace KO.ServerListener
 {
@@ -23,32 +13,14 @@ namespace KO.ServerListener
         public string TimeStamp => DateTime.Now.ToString("T");
 
         /// <summary>
-        /// Stores the host to connect.
+        /// Stores the loginServer object.
         /// </summary>
-        private string _hostIp;
-        
-        /// <summary>
-        /// Stores the frequency the call will be made.
-        /// minimum frequency is set to 500 miliseconds.
-        /// </summary>
-        private int _frequencyMiliseconds;
-        
-        /// <summary>
-        /// Stores a bool to know if listening loop 
-        /// has been started.
-        /// </summary>
-        private bool _startListening;
+        private LoginServer loginServer;
 
         /// <summary>
-        /// Stores the ports.
+        /// Stores the gameServer object.
         /// </summary>
-        private readonly int LOGIN_SERVER = 15100;
-        private readonly int GAME_SERVER  = 15001;
-
-        /// <summary>
-        /// Stores the workers.
-        /// </summary>
-        private Thread[] workers = new Thread[2];
+        private GameServer gameServer;
 
         /// <summary>
         /// Intialize the form component.
@@ -59,25 +31,97 @@ namespace KO.ServerListener
         }
 
         /// <summary>
+        /// When the ping request has been sent,
+        /// this method will be called with the status.
+        /// so we can update the GUI accordantly.
+        /// </summary>
+        private void LoginServerState(ServerEventArgs e)
+        {
+            if (e.IsServerAvailable)
+            {
+                if (this.cbxLoginServer.Checked)
+                {
+                    Activate();
+                    Console.Beep();
+                }
+
+                lbxLogger.Items.Add($"[{TimeStamp}] - Login server is reachable!");
+                statusLoginServer.Text = "Online";
+                statusLoginServer.BackColor = Color.Green;
+            }
+            else
+            {
+                lbxLogger.Items.Add($"[{TimeStamp}] - Login server is unreachable...");
+                statusLoginServer.Text = "Offline";
+                statusLoginServer.BackColor = Color.Red;
+            }
+
+            lbxLogger.SelectedIndex = lbxLogger.Items.Count - 1;
+
+        }
+
+        /// <summary>
+        /// When the ping request has been sent,
+        /// this method will be called with the status,
+        /// so we can update the GUI accordantly.
+        /// </summary>
+        private void GameServerState(ServerEventArgs e)
+        {
+            if (e.IsServerAvailable)
+            {
+                if (cbxGameServer.Checked)
+                {
+                    Activate();
+                    Console.Beep();
+                }
+
+                lbxLogger.Items.Add($"[{TimeStamp}] - Game server is reachable!");
+                statusGameServer.Text = "Online";
+                statusGameServer.BackColor = Color.Green;
+            }
+            else
+            {
+                lbxLogger.Items.Add($"[{TimeStamp}] - Game server is unreachable...");
+                statusGameServer.Text = "Offline";
+                statusGameServer.BackColor = Color.Red;
+            }
+
+            lbxLogger.SelectedIndex = lbxLogger.Items.Count - 1;
+        }
+
+        /// <summary>
         /// When clicking on the start button event listener.
         /// </summary>
         private void btnStart_Click(object sender, EventArgs e)
         {
-            _hostIp = tbxHostIp.Text;
-            int.TryParse(tbxFrequency.Text, out _frequencyMiliseconds);
-            if (_frequencyMiliseconds < 500) _frequencyMiliseconds = 500;
+            int frequencyMiliseconds;
+            int.TryParse(tbxFrequency.Text, out frequencyMiliseconds);
 
-            _startListening      = true;
             btnStart.Enabled     = false;
             btnStop.Enabled      = true;
             btnClear.Enabled     = false;
             tbxHostIp.Enabled    = false;
             tbxFrequency.Enabled = false;
 
-            workers[0] = new Thread(StartListeningLoginServer);
-            workers[1] = new Thread(StartListeningGameServer);
-            foreach (Thread worker in workers)
-                worker.Start();
+            loginServer = new LoginServer(tbxHostIp.Text, frequencyMiliseconds);
+            gameServer = new GameServer(tbxHostIp.Text, frequencyMiliseconds);
+
+            loginServer.LoginServerState += (args) => InvokeMethod(args, () => LoginServerState(args));
+            gameServer.GameServerState += (args) => InvokeMethod(args, () => GameServerState(args));
+
+            loginServer.StartListening();
+            gameServer.StartListening();
+        }  
+
+        /// <summary>
+        /// Invoking method in a thread safe manner.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="args">Generic EventArgs that are passed to the event. </param>
+        /// <param name="action">A callback method that will get executed by joining the thread pool on the form. </param>
+        public void InvokeMethod<T>(T args, Action action) where T : EventArgs
+        {
+            if (InvokeRequired) BeginInvoke(action);
         }
 
         /// <summary>
@@ -85,7 +129,9 @@ namespace KO.ServerListener
         /// </summary>
         private void btnStop_Click(object sender, EventArgs e)
         {
-            _startListening      = false;
+            loginServer.StopListening();
+            gameServer.StopListening();
+
             btnStart.Enabled     = true;
             btnStop.Enabled      = false;
             btnClear.Enabled     = true;
@@ -107,136 +153,19 @@ namespace KO.ServerListener
         /// </summary>
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-            if (!_startListening) return;
+            lbxLogger.Items.Add($"[{TimeStamp}] - Closing working threads before application closes.");
 
-            _startListening = false;
-            foreach (Thread worker in workers)
+            if (loginServer != null)
             {
-                if (worker == null) continue;
-                worker.Abort();
-                lbxLogger.Items.Add($"[{TimeStamp}] - Closing worker thread {worker.ManagedThreadId} before application closes.");
-                lbxLogger.SelectedIndex = lbxLogger.Items.Count - 1;
-                Thread.Sleep(750);
+                loginServer.StopListening();
+                loginServer.thread.Join();
             }
 
-            /// Free up the main thread so the foreach loop behind get the chance to update the ui.
-            Thread tDelayed = new Thread(() => Thread.Sleep(3500));
-            tDelayed.Start();
-            tDelayed.Join();
-        }
-
-        /// <summary>
-        /// This method is fired by a worker and is pinging
-        /// the Login-Server.
-        /// </summary>
-        private void StartListeningLoginServer()
-        {
-            bool isServerReachable = false;
-
-            do
+            if (gameServer != null)
             {
-                Thread.Sleep(_frequencyMiliseconds);
-
-                using (TcpClient client = new TcpClient())
-                {
-                    try
-                    {
-                        isServerReachable = client.ConnectAsync(_hostIp, LOGIN_SERVER).Wait(2000);
-                    }
-                    catch { }
-
-                    lock (lbxLogger)
-                    {
-                        if (!InvokeRequired) continue;
-                        bool reachable = isServerReachable;
-                        BeginInvoke(new MethodInvoker(() => UpdateLoginServer(reachable)));
-                    }
-                }
-            } while (_startListening);
-        }
-
-        /// <summary>
-        /// This method is fired by a worker and is pinging
-        /// the Game-Server.
-        /// </summary>
-        private void StartListeningGameServer()
-        {
-            bool isServerReachable = false;
-
-            do
-            {
-                Thread.Sleep(_frequencyMiliseconds);
-
-                using (TcpClient client = new TcpClient())
-                {
-                    try
-                    {
-                        isServerReachable = client.ConnectAsync(_hostIp, GAME_SERVER).Wait(2000);
-                    }
-                    catch { }
-
-                    lock (lbxLogger)
-                    {
-                        if (!InvokeRequired) continue;
-                        bool reachable = isServerReachable;
-                        BeginInvoke(new MethodInvoker(() => UpdateGameServer(reachable)));
-                    }
-                }
-            } while (_startListening);
-        }
-
-        /// <summary>
-        /// This method updates the login server row on the window.
-        /// based on if the server is online or offline.
-        /// </summary>
-        private void UpdateLoginServer(bool isServerReachable)
-        {
-            if (isServerReachable)
-            {
-                if (cbxLoginServer.Checked)
-                {
-                    Activate();
-                    Console.Beep();
-                }
-                lbxLogger.Items.Add($"[{TimeStamp}] - Login server is reachable!");
-                statusLoginServer.Text = "Online";
-                statusLoginServer.BackColor = Color.Green;
+                gameServer.StopListening();
+                gameServer.thread.Join();
             }
-            else
-            {
-                lbxLogger.Items.Add($"[{TimeStamp}] - Login server is unreachable...");
-                statusLoginServer.Text = "Offline";
-                statusLoginServer.BackColor = Color.Red;
-            }
-
-            lbxLogger.SelectedIndex = lbxLogger.Items.Count - 1;
-        }
-
-        /// <summary>
-        /// This method updates the game server row on the window.
-        /// based on if the server is online or offline.
-        /// </summary>
-        private void UpdateGameServer(bool isServerReachable)
-        {
-            if (isServerReachable)
-            {
-                if (cbxGameServer.Checked)
-                {
-                    Activate();
-                    Console.Beep();
-                }
-                lbxLogger.Items.Add($"[{TimeStamp}] - Game server is reachable!");
-                statusGameServer.Text = "Online";
-                statusGameServer.BackColor = Color.Green;
-            }
-            else
-            {
-                lbxLogger.Items.Add($"[{TimeStamp}] - Game server is unreachable...");
-                statusGameServer.Text = "Offline";
-                statusGameServer.BackColor = Color.Red;
-            }
-
-            lbxLogger.SelectedIndex = lbxLogger.Items.Count - 1;
         }
     }
 }

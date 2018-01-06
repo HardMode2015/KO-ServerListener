@@ -38,6 +38,7 @@ namespace KO.ServerListener.Library
             isServerListening = true;
             thread = new Thread(Listen);
             thread.Start();
+            ThreadsCount++;
         }
 
         /// <summery>

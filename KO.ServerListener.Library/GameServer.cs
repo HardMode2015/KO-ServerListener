@@ -36,8 +36,9 @@ namespace KO.ServerListener.Library
         public override void StartListening()
         {
             isServerListening = true;
-            thread = new Thread(Listen); 
+            thread = new Thread(Listen);
             thread.Start();
+            ThreadsCount++;
         }
 
         /// <summery>

@@ -10,6 +10,11 @@ namespace KO.ServerListener.Library
         protected static string TimeStamp => DateTime.Now.ToString("T");
 
         /// <summary>
+        /// Stores the running threads count.
+        /// </summary>
+        public static int ThreadsCount = 0;
+
+        /// <summary>
         /// Stores the host ip address.
         /// </summary>
         protected readonly string hostIp;
